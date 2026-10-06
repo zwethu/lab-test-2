@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { db, newId } from "./db.js";
 
 export const app = new Hono();
@@ -125,8 +125,17 @@ app.get("/api/bookings/:id", (c) => {
   return c.json(toResponse(row));
 });
 
+async function parseJsonBody(c: Context): Promise<Record<string, unknown> | null> {
+  try {
+    return await c.req.json<Record<string, unknown>>();
+  } catch {
+    return null;
+  }
+}
+
 app.post("/api/bookings", async (c) => {
-  const body = await c.req.json<Record<string, unknown>>();
+  const body = await parseJsonBody(c);
+  if (body === null) return c.json({ error: "invalid JSON body" }, 400);
 
   const error = validateBooking(body);
   if (error) return c.json({ error: error.message }, error.status);
@@ -157,7 +166,8 @@ app.patch("/api/bookings/:id", async (c) => {
     .get(id) as BookingRow | undefined;
   if (!existing) return c.json({ error: "booking not found" }, 404);
 
-  const body = await c.req.json<Record<string, unknown>>();
+  const body = await parseJsonBody(c);
+  if (body === null) return c.json({ error: "invalid JSON body" }, 400);
 
   const merged: Record<string, unknown> = {
     equipmentId: body.equipmentId ?? existing.equipment_id,
@@ -196,4 +206,9 @@ app.delete("/api/bookings/:id", (c) => {
 
   db.prepare("DELETE FROM bookings WHERE id = ?").run(id);
   return c.body(null, 204);
+});
+
+app.onError((err, c) => {
+  console.error(err);
+  return c.json({ error: "internal server error" }, 500);
 });

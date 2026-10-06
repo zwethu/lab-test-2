@@ -2,6 +2,22 @@
 
 Base URL: `http://localhost:8787/api`
 
+## Assumptions
+
+- Dates (`startAt`, `endAt`) are ISO 8601 strings in UTC (e.g. `2026-10-20T09:00:00.000Z`).
+- Equipment is read-only via the API (pre-seeded data) — no `POST/PATCH/DELETE /equipment`, since the brief only requires `GET /equipment` and asks for "at least two equipment records," not equipment management endpoints.
+- No authentication is required — the brief's scope is CRUD, validation, status codes, and SQL safety, not auth.
+- Overlap is defined as a half-open interval clash: `startAt < other.endAt AND endAt > other.startAt`. Two bookings that touch exactly at the boundary (one ends exactly when the other starts) do **not** count as overlapping.
+- `PATCH` accepts partial fields; any field not sent keeps its existing value. The merged result is still validated and overlap-checked as a whole before saving.
+
+## Status Code Rationale
+
+| Code | Used when | Reasoning |
+|---|---|---|
+| `400` | The request itself is malformed — missing/invalid field, or `startAt >= endAt` | Client sent data that can never be valid, regardless of server state |
+| `404` | A referenced resource doesn't exist — unknown `equipmentId`, or unknown booking `id` | The request is well-formed, but points at something that isn't there |
+| `409` | The data is individually valid, but conflicts with existing data — overlapping time range for the same equipment | Not a client input error; it's a state conflict that depends on what else is already booked |
+
 ## Data Model
 
 ```
